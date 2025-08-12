@@ -1,0 +1,36 @@
+name: build-and-deploy
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RG: ${{ secrets.AZ_RESOURCE_GROUP }}
+  SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+  LOCATION: ${{ secrets.AZ_LOCATION }}
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+
+      - name: Build API image
+        run: |
+          az acr build -r $ACR_NAME -t netflow/api:$(git rev-parse --short HEAD) -f app/api/Dockerfile .
+
+      - name: Build Web image
+        run: |
+          az acr build -r $ACR_NAME -t netflow/web:$(git rev-parse --short HEAD) -f app/web/Dockerfile .

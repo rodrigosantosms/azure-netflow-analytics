@@ -1,0 +1,65 @@
+// flow-schema.kql - create table and ingestion mapping for flow logs in ADX
+.create-or-alter table FlowLogsRaw (TimeGenerated: datetime, SrcIp: string, DstIp: string, SrcPort: int, DstPort: int, L4Protocol: string, Direction: string, Decision: string, Bytes: long, Packets: long, StartTime: datetime, EndTime: datetime, TenantId: string, SubscriptionId: string, ResourceGroup: string, SrcVm: string, SrcVnet: string, SrcSubnet: string, DstVm: string, DstVnet: string, DstSubnet: string, NsgRuleName: string, ServiceTag: string, DstFqdn: string, DstAsn: string, DstCountry: string, ExpressRouteCircuit: string, ExpressRouteGateway: string, PrivateEndpoint: string, PrivateLinkService: string)
+
+.create-or-alter table FlowLogsRaw ingestion json mapping 'FlowLogsRawMapping'
+'['
+  '{"column":"TimeGenerated","path":"$.TimeGenerated"}',
+  '{"column":"SrcIp","path":"$.SrcIp"}',
+  '{"column":"DstIp","path":"$.DstIp"}',
+  '{"column":"SrcPort","path":"$.SrcPort"}',
+  '{"column":"DstPort","path":"$.DstPort"}',
+  '{"column":"L4Protocol","path":"$.L4Protocol"}',
+  '{"column":"Direction","path":"$.Direction"}',
+  '{"column":"Decision","path":"$.Decision"}',
+  '{"column":"Bytes","path":"$.Bytes"}',
+  '{"column":"Packets","path":"$.Packets"}',
+  '{"column":"StartTime","path":"$.StartTime"}',
+  '{"column":"EndTime","path":"$.EndTime"}',
+  '{"column":"TenantId","path":"$.TenantId"}',
+  '{"column":"SubscriptionId","path":"$.SubscriptionId"}',
+  '{"column":"ResourceGroup","path":"$.ResourceGroup"}',
+  '{"column":"SrcVm","path":"$.SrcVm"}',
+  '{"column":"SrcVnet","path":"$.SrcVnet"}',
+  '{"column":"SrcSubnet","path":"$.SrcSubnet"}',
+  '{"column":"DstVm","path":"$.DstVm"}',
+  '{"column":"DstVnet","path":"$.DstVnet"}',
+  '{"column":"DstSubnet","path":"$.DstSubnet"}',
+  '{"column":"NsgRuleName","path":"$.NsgRuleName"}',
+  '{"column":"ServiceTag","path":"$.ServiceTag"}',
+  '{"column":"DstFqdn","path":"$.DstFqdn"}',
+  '{"column":"DstAsn","path":"$.DstAsn"}',
+  '{"column":"DstCountry","path":"$.DstCountry"}',
+  '{"column":"ExpressRouteCircuit","path":"$.ExpressRouteCircuit"}',
+  '{"column":"ExpressRouteGateway","path":"$.ExpressRouteGateway"}',
+  '{"column":"PrivateEndpoint","path":"$.PrivateEndpoint"}',
+  '{"column":"PrivateLinkService","path":"$.PrivateLinkService"}'
+']'
+
+// Curated table (with binning)
+.create-or-alter function with (folder='etl', docstring='Normalize into FlowLogs fact table') NormalizeFlow()
+{
+    FlowLogsRaw
+    | extend FiveMinBin = bin(TimeGenerated, 5m)
+    | project FiveMinBin, TimeGenerated, SrcIp, DstIp, SrcPort, DstPort, L4Protocol, Direction, Decision, Bytes, Packets, StartTime, EndTime,
+              TenantId, SubscriptionId, ResourceGroup, SrcVm, SrcVnet, SrcSubnet, DstVm, DstVnet, DstSubnet, NsgRuleName, ServiceTag, DstFqdn, DstAsn, DstCountry, ExpressRouteCircuit, ExpressRouteGateway, PrivateEndpoint, PrivateLinkService
+}
+
+// Materialized views for speed
+.create-or-alter materialized-view with (backfill=true) mv_topTalkers_5m on table FlowLogsRaw
+{
+  FlowLogsRaw
+  | summarize Bytes=sum(Bytes), Packets=sum(Packets), Flows=count() by FiveMinBin=bin(TimeGenerated, 5m), SrcVm, DstVm, SrcIp, DstIp, L4Protocol, DstPort, SrcVnet, DstVnet, ExpressRouteCircuit, PrivateEndpoint
+}
+
+.create-or-alter materialized-view with (backfill=true) mv_topTalkers_1h on table FlowLogsRaw
+{
+  FlowLogsRaw
+  | summarize Bytes=sum(Bytes), Packets=sum(Packets), Flows=count() by HourBin=bin(TimeGenerated, 1h), SrcVm, DstVm, SrcVnet, DstVnet, L4Protocol, DstPort, ExpressRouteCircuit, PrivateEndpoint
+}
+
+// Heatmap (source x destination) aggregation view
+.create-or-alter materialized-view with (backfill=true) mv_heatmap_5m on table FlowLogsRaw
+{
+  FlowLogsRaw
+  | summarize Bytes=sum(Bytes), Flows=count() by FiveMinBin=bin(TimeGenerated, 5m), SrcVm, DstVm
+}
