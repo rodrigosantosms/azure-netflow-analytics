@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": { "value": "netflow" },
+    "location": { "value": "eastus" },
+    "laDailyCap": { "value": 0 },
+    "adxSku": { "value": "Standard_D11_v2" },
+    "adxInstances": { "value": 2 },
+    "laClusterCapacity": { "value": 100 },
+    "enableContainerApps": { "value": true },
+    "containerAppsInternal": { "value": true },
+    "repoUrl": { "value": "https://github.com/rodrigosantosms/azure-netflow-analytics" }
+  }
+}
